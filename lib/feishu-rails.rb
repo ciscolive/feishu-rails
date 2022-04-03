@@ -1,11 +1,14 @@
+# frozen_string_literal: true
+
 require "feishu/version"
-require "feishu/config"
 require "feishu/connector"
 
 module Feishu
   class << self
-    def configure(&block)
-      Config.configure(&block)
+    attr_accessor :app_id, :app_secret, :encrypt_key
+
+    def config
+      yield self
     end
   end
 end
