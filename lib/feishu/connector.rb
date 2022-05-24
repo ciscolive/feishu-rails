@@ -17,18 +17,9 @@ module Feishu
     GROUP_INFO = "https://open.feishu.cn/open-apis/chat/v4/info"
     SEND_TEXT  = "https://open.feishu.cn/open-apis/message/v4/send"
 
-    # 获取飞书 TOKEN 并缓存
-    def access_token
-      Rails.cache.fetch("feishu_token", expires_in: 30.minutes) do
-        # res = HTTP.post(AUTH_URL, json: { app_id: app_id, app_secret: app_secret })
-        res = HTTP.post(AUTH_URL, json: { app_id: Feishu.app_id, app_secret: Feishu.app_secret })
-        JSON.parse(res.body.readpartial)["tenant_access_token"]
-      end
-    end
-
     # 认证成功后，后续请求都携带 TOKEN
     def request
-      HTTP.headers(Authorization: "Bearer #{access_token}")
+      HTTP.headers(Authorization: "Bearer #{feishu_token}")
     end
 
     # 根据手机号码查询用户的 USER_ID
@@ -65,6 +56,8 @@ module Feishu
 
       # 返回上传后的序列号
       ret["data"]["image_key"]
+    rescue => e
+      Rails.logger("上传图片期间捕捉到异常：#{e}")
     end
 
     # 获取机器人所在的群列表
@@ -105,6 +98,10 @@ module Feishu
 
     # 向特定群组发生消息
     def send_alert(chat_id, title, content, image_path)
+      # 获取上传文件路径
+      uploaded_image_path = upload_image(image_path)
+
+      # 初始化数据结构
       data = {
         chat_id:  chat_id,
         msg_type: "post",
@@ -121,8 +118,7 @@ module Feishu
                            },
                            {
                              tag:     "at",
-                             user_id: user_id("15673443571")
-
+                             user_id: "all"
                            },
                          ],
                          [
@@ -138,13 +134,27 @@ module Feishu
           }
         }
       }
+      # 如果图片不存在则移除相关属性
+      data[:content][:post][:zh_cn][:content].pop if uploaded_image_path.blank?
+
       # 请求后端
       res = request.post(SEND_TEXT, json: data)
 
       # 序列化
       JSON.parse(res.body.readpartial).to_query
 
-      alias_method :feishu_alert, :send_alert
+    rescue => e
+      Rails.logger("群发消息期间捕捉到异常：#{e}")
     end
   end
+
+  private
+    def feishu_token
+      # 获取飞书 TOKEN 并缓存
+      Rails.cache.fetch("feishu_token", expires_in: 30.minutes) do
+        # res = HTTP.post(AUTH_URL, json: { app_id: app_id, app_secret: app_secret })
+        res = HTTP.post(AUTH_URL, json: { app_id: Feishu.app_id, app_secret: Feishu.app_secret })
+        JSON.parse(res.body.readpartial)["tenant_access_token"]
+      end
+    end
 end

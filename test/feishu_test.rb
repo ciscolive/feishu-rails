@@ -8,6 +8,5 @@ class FeishuTest < ActiveSupport::TestCase
   end
 
   test "define default attributes" do
-
   end
 end
